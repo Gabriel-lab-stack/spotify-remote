@@ -385,6 +385,7 @@
   // ---------- Transfert de connexion vers un autre appareil ----------
   function shareLink() { return REDIRECT + '#rt=' + encodeURIComponent(ls('rt') || ''); }
   function openShare() {
+    if (!ls('rt')) { toast('Reconnecte-toi sur ce PC d\'abord'); return; }
     $('sharePanel').style.display = 'block';
     $('qr').innerHTML = '';
     try { new QRCode($('qr'), { text: shareLink(), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L }); }
@@ -411,8 +412,11 @@
   $('shareBtn').onclick = openShare;
   $('copyLink').onclick = copyLink;
   $('linkBtn').onclick = function () {
-    var m = /#rt=([^&\s]+)/.exec($('linkInput').value);
-    if (m) useRefreshToken(decodeURIComponent(m[1])); else $('err').textContent = 'Lien non reconnu.';
+    var v = $('linkInput').value.replace(/\s+/g, '');
+    var m = /rt=([^&#]+)/.exec(v);
+    var token = m ? decodeURIComponent(m[1]) : (!/^https?:/i.test(v) && v.length > 40 ? v : '');
+    if (token) useRefreshToken(token);
+    else $('err').textContent = 'Ce lien ne contient pas la connexion. Sur le PC : nom de l\'appareil en haut à droite → « Connecter un autre appareil » → « Copier le lien ».';
   };
   bindButtons();
 
@@ -429,7 +433,7 @@
 
   if (!clientId()) { show('setup'); return; }
 
-  var hashRt = /#rt=([^&]+)/.exec(location.hash);
+  var hashRt = /rt=([^&#]+)/.exec(location.hash);
   if (hashRt) { useRefreshToken(decodeURIComponent(hashRt[1])); return; }
 
   var params = {};
