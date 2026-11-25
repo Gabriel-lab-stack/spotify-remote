@@ -107,6 +107,9 @@
   <p>Connecte ton compte une seule fois, la télécommande s'en souviendra.</p>
   <button class="pill" id="loginBtn">Se connecter à Spotify</button>
   <div id="err"></div>
+  <p style="margin-top:10px">Connexion impossible sur ce téléphone ?<br>Colle ici le lien de connexion copié depuis le PC :</p>
+  <input id="linkInput" placeholder="https://…#rt=…" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button class="pill" id="linkBtn" style="background:#262630;color:#fff">Utiliser ce lien</button>
 </div>
 
 <!-- 3. Télécommande -->
@@ -141,9 +144,16 @@
 <div id="devices"><div id="sheet">
   <h2>Jouer sur…</h2>
   <div id="devlist"></div>
-  <div class="row"><button id="closeDev">Fermer</button><button id="logout">Se déconnecter</button></div>
+  <div class="row"><button id="closeDev">Fermer</button><button id="shareBtn">Connecter un autre appareil</button></div>
+  <div id="sharePanel" style="display:none;text-align:center;margin-top:14px">
+    <p style="margin:0 0 10px;font-size:14px;opacity:.75">Scanne ce QR code avec l'appareil photo de l'iPhone. Ne le partage avec personne : il donne le contrôle de ton Spotify.</p>
+    <div id="qr" style="display:inline-block;background:#fff;padding:12px;border-radius:12px"></div>
+    <div class="row"><button id="copyLink">Copier le lien</button></div>
+  </div>
+  <div class="row"><button id="logout">Se déconnecter</button></div>
 </div></div>
 <div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script>
 (function () {
@@ -372,13 +382,38 @@
     }).catch(handleErr);
   }
 
+  // ---------- Transfert de connexion vers un autre appareil ----------
+  function shareLink() { return REDIRECT + '#rt=' + encodeURIComponent(ls('rt') || ''); }
+  function openShare() {
+    $('sharePanel').style.display = 'block';
+    $('qr').innerHTML = '';
+    try { new QRCode($('qr'), { text: shareLink(), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L }); }
+    catch (e) { $('qr').textContent = 'QR indisponible : utilise « Copier le lien ».'; }
+  }
+  function copyLink() {
+    var link = shareLink();
+    if (navigator.clipboard) navigator.clipboard.writeText(link).then(function () { toast('Lien copié'); }, function () { prompt('Copie ce lien :', link); });
+    else prompt('Copie ce lien :', link);
+  }
+  function useRefreshToken(rt) {
+    ls('rt', rt); ls('at', null); ls('exp', null);
+    history.replaceState(null, '', REDIRECT);
+    getToken().then(startRemote).catch(function (e) { show('login'); $('err').textContent = 'Lien expiré ou invalide : génère-en un nouveau sur le PC.'; ls('rt', null); });
+  }
+
   // ---------- Démarrage ----------
   $('redirShow').textContent = REDIRECT;
   $('saveCid').onclick = function () { var v = $('cidInput').value.trim(); if (v) { ls('cid', v); location.reload(); } };
   $('loginBtn').onclick = login;
   $('device').onclick = openDevices;
-  $('closeDev').onclick = function () { $('devices').classList.remove('on'); };
+  $('closeDev').onclick = function () { $('devices').classList.remove('on'); $('sharePanel').style.display = 'none'; };
   $('logout').onclick = logout;
+  $('shareBtn').onclick = openShare;
+  $('copyLink').onclick = copyLink;
+  $('linkBtn').onclick = function () {
+    var m = /#rt=([^&\s]+)/.exec($('linkInput').value);
+    if (m) useRefreshToken(decodeURIComponent(m[1])); else $('err').textContent = 'Lien non reconnu.';
+  };
   bindButtons();
 
   function clock() { var d = new Date(); $('clock').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
@@ -393,6 +428,9 @@
   }
 
   if (!clientId()) { show('setup'); return; }
+
+  var hashRt = /#rt=([^&]+)/.exec(location.hash);
+  if (hashRt) { useRefreshToken(decodeURIComponent(hashRt[1])); return; }
 
   var params = {};
   location.search.replace(/^\?/, '').split('&').forEach(function (kv) { if (kv) { var p = kv.split('='); params[p[0]] = decodeURIComponent(p[1] || ''); } });
