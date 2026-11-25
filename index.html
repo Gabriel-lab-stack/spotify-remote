@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spotify">
+<meta name="theme-color" content="#0b0b0f">
+<title>Télécommande Spotify</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #0b0b0f; color: #f2f2f5; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; -webkit-user-select: none; user-select: none; }
+  #bg { position: fixed; top: -40px; left: -40px; right: -40px; bottom: -40px; background-size: cover; background-position: center;
+    filter: blur(40px) brightness(.35) saturate(1.3); z-index: 0; }
+
+  .screen { position: relative; z-index: 1; height: 100%; display: none; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: calc(env(safe-area-inset-top) + 18px) 26px calc(env(safe-area-inset-bottom) + 22px); }
+  .screen.on { display: flex; }
+
+  /* Écrans de configuration */
+  .center { justify-content: center; gap: 18px; text-align: center; }
+  .center h1 { font-size: 26px; margin: 0; }
+  .center p { margin: 0; opacity: .7; font-size: 15px; line-height: 1.45; max-width: 420px; }
+  .center input { width: 100%; max-width: 420px; font-size: 16px; padding: 14px; border-radius: 12px; border: 1px solid #333; background: #16161d; color: #fff; -webkit-user-select: text; user-select: text; }
+  .pill { background: #1ed760; color: #000; font-weight: 700; font-size: 17px; padding: 16px 30px; border-radius: 999px; border: 0; }
+  .code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: #16161d; padding: 10px 12px; border-radius: 8px; word-break: break-all; -webkit-user-select: text; user-select: text; }
+  #err { color: #ff6b6b; font-size: 14px; min-height: 18px; }
+
+  /* Télécommande */
+  #top { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+  #clock { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #device { font-size: 13px; opacity: .75; background: rgba(255,255,255,.1); border: 0; color: inherit; padding: 8px 12px; border-radius: 999px; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #device b { color: #1ed760; font-weight: 600; }
+
+  #main { flex: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+  #art { width: 72vw; height: 72vw; max-width: 42vh; max-height: 42vh; border-radius: 14px; background: #1c1c24 center/cover no-repeat;
+    box-shadow: 0 20px 50px rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; font-size: 64px; color: #444; }
+  .meta { width: 100%; text-align: center; }
+  .title { font-size: 22px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .artist { font-size: 16px; opacity: .65; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #side { width: 100%; }
+  #bar { height: 4px; background: rgba(255,255,255,.18); border-radius: 2px; overflow: hidden; }
+  #fill { height: 100%; width: 0; background: #fff; }
+  #times { display: flex; justify-content: space-between; font-size: 12px; opacity: .5; margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+  #controls { width: 100%; display: flex; justify-content: space-around; align-items: center; margin-top: 14px; }
+  #volinfo { margin-top: 16px; display: flex; align-items: center; gap: 10px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
+  #volbar { flex: 1; height: 3px; background: rgba(255,255,255,.18); border-radius: 2px; overflow: hidden; }
+  #volfill { height: 100%; width: 0; background: #1ed760; }
+  #vollevel { min-width: 40px; text-align: right; }
+  #volume { width: 100%; display: flex; justify-content: space-between; margin-top: 8px; }
+
+  .btn { background: none; border: 0; color: inherit; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: transform .1s; }
+  .btn.pressed { transform: scale(.9); background: rgba(255,255,255,.12); }
+  .btn svg { fill: currentColor; }
+  .big { width: 86px; height: 86px; background: #fff; color: #0b0b0f; }
+  .big.pressed { background: #ddd; }
+  .mid { width: 64px; height: 64px; }
+  .small { width: 56px; height: 56px; opacity: .85; }
+
+  #toast { position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 10px); text-align: center; font-size: 13px;
+    color: #fff; background: rgba(200,50,50,.9); padding: 10px; border-radius: 10px; display: none; z-index: 5; }
+
+  /* Liste des appareils */
+  #devices { position: fixed; inset: 0; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.75); z-index: 4; display: none; align-items: flex-end; }
+  #devices.on { display: flex; }
+  #sheet { width: 100%; background: #16161d; border-radius: 18px 18px 0 0; padding: 18px 18px calc(env(safe-area-inset-bottom) + 18px); }
+  #sheet h2 { margin: 0 0 10px; font-size: 18px; }
+  .dev { width: 100%; text-align: left; background: none; border: 0; color: #fff; font-size: 17px; padding: 14px 6px; border-bottom: 1px solid #262630; }
+  .dev.active { color: #1ed760; font-weight: 700; }
+  .dev small { display: block; opacity: .5; font-size: 12px; font-weight: 400; margin-top: 2px; }
+  #sheet .row { display: flex; gap: 10px; margin-top: 14px; }
+  #sheet .row button { flex: 1; padding: 14px; border-radius: 12px; border: 0; font-size: 15px; background: #262630; color: #fff; }
+
+  @media (orientation: landscape) {
+    #remote.on { flex-direction: row; align-items: center; gap: 36px; padding-left: calc(env(safe-area-inset-left) + 30px); padding-right: calc(env(safe-area-inset-right) + 30px); }
+    #top { position: absolute; top: 12px; left: calc(env(safe-area-inset-left) + 30px); right: calc(env(safe-area-inset-right) + 30px); width: auto; }
+    #main { flex: 0 0 auto; width: auto; }
+    #art { width: 62vh; height: 62vh; max-width: none; max-height: none; }
+    #main .meta { display: none; }
+    #side { flex: 1; }
+    #side .meta { display: block; text-align: left; margin-bottom: 18px; }
+  }
+  #side .meta { display: none; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+
+<!-- 1. Client ID manquant -->
+<div class="screen center" id="setup">
+  <h1>Configuration</h1>
+  <p>Colle le <b>Client ID</b> de ton appli Spotify (developer.spotify.com).</p>
+  <input id="cidInput" placeholder="Client ID" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button class="pill" id="saveCid">Enregistrer</button>
+  <p>Adresse de redirection à mettre dans Spotify :</p>
+  <div class="code" id="redirShow"></div>
+</div>
+
+<!-- 2. Connexion -->
+<div class="screen center" id="login">
+  <h1>Télécommande Spotify</h1>
+  <p>Connecte ton compte une seule fois, la télécommande s'en souviendra.</p>
+  <button class="pill" id="loginBtn">Se connecter à Spotify</button>
+  <div id="err"></div>
+</div>
+
+<!-- 3. Télécommande -->
+<div class="screen" id="remote">
+  <div id="top"><div id="clock">--:--</div><button id="device">Choisir un appareil</button></div>
+
+  <div id="main">
+    <div id="art">♪</div>
+    <div class="meta"><div class="title">Rien en lecture</div><div class="artist">Lance Spotify sur le PC</div></div>
+  </div>
+
+  <div id="side">
+    <div class="meta"><div class="title"></div><div class="artist"></div></div>
+    <div id="progress">
+      <div id="bar"><div id="fill"></div></div>
+      <div id="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
+    </div>
+    <div id="controls">
+      <button class="btn mid" data-cmd="prev"><svg width="34" height="34" viewBox="0 0 24 24"><path d="M6 6h2v12H6zM9.5 12l8.5 6V6z"/></svg></button>
+      <button class="btn big" data-cmd="playpause"><svg width="40" height="40" viewBox="0 0 24 24" id="ppicon"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="btn mid" data-cmd="next"><svg width="34" height="34" viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
+    </div>
+    <div id="volinfo"><span>Volume Spotify</span><div id="volbar"><div id="volfill"></div></div><span id="vollevel"></span></div>
+    <div id="volume">
+      <button class="btn small" data-cmd="voldown" data-repeat="1"><svg width="28" height="28" viewBox="0 0 24 24"><path d="M5 9v6h4l5 5V4L9 9H5zm11.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg></button>
+      <button class="btn small" data-cmd="mute"><svg width="28" height="28" viewBox="0 0 24 24"><path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.45 2.45c.03-.2.05-.42.05-.65zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg></button>
+      <button class="btn small" data-cmd="volup" data-repeat="1"><svg width="28" height="28" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<div id="devices"><div id="sheet">
+  <h2>Jouer sur…</h2>
+  <div id="devlist"></div>
+  <div class="row"><button id="closeDev">Fermer</button><button id="logout">Se déconnecter</button></div>
+</div></div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  // ===== À REMPLIR : le Client ID de ton appli Spotify =====
+  var CLIENT_ID = '20b42d6f34bd41f18d4f057e398c320e';
+  // =========================================================
+
+  var REDIRECT = location.origin + location.pathname;
+  var SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing';
+  var API = 'https://api.spotify.com/v1';
+
+  function $(id) { return document.getElementById(id); }
+  function all(sel) { return document.querySelectorAll(sel); }
+  function ls(k, v) {
+    try {
+      if (v === undefined) return localStorage.getItem(k);
+      if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+    } catch (e) { return null; }
+  }
+  function clientId() { return CLIENT_ID.indexOf('COLLE') === 0 ? ls('cid') : CLIENT_ID; }
+  function show(id) { var s = all('.screen'); for (var i = 0; i < s.length; i++) s[i].classList.toggle('on', s[i].id === id); }
+  var toastTimer;
+  function toast(msg) { $('toast').textContent = msg; $('toast').style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(function () { $('toast').style.display = 'none'; }, 3500); }
+  function fmt(ms) { var s = Math.max(0, Math.floor((ms || 0) / 1000)); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+  function qs(o) { var p = []; for (var k in o) p.push(encodeURIComponent(k) + '=' + encodeURIComponent(o[k])); return p.join('&'); }
+
+  // ---------- Connexion Spotify (PKCE, sans serveur) ----------
+  function rand(n) {
+    var a = new Uint8Array(n), c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', s = '';
+    crypto.getRandomValues(a);
+    for (var i = 0; i < n; i++) s += c[a[i] % c.length];
+    return s;
+  }
+  function b64url(buf) {
+    var b = new Uint8Array(buf), s = '';
+    for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function login() {
+    var v = rand(64);
+    ls('verifier', v);
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)).then(function (h) {
+      location.href = 'https://accounts.spotify.com/authorize?' + qs({
+        client_id: clientId(), response_type: 'code', redirect_uri: REDIRECT, scope: SCOPES,
+        code_challenge_method: 'S256', code_challenge: b64url(h)
+      });
+    });
+  }
+  function tokenRequest(params) {
+    params.client_id = clientId();
+    return fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: qs(params)
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.access_token) throw new Error(d.error_description || d.error || 'Connexion refusée');
+      ls('at', d.access_token);
+      ls('exp', String(Date.now() + (d.expires_in - 60) * 1000));
+      if (d.refresh_token) ls('rt', d.refresh_token);
+      return d.access_token;
+    });
+  }
+  var refreshing = null;
+  function getToken() {
+    var at = ls('at'), exp = +ls('exp') || 0;
+    if (at && Date.now() < exp) return Promise.resolve(at);
+    var rt = ls('rt');
+    if (!rt) return Promise.reject(new Error('login'));
+    if (!refreshing) {
+      refreshing = tokenRequest({ grant_type: 'refresh_token', refresh_token: rt })
+        .then(function (t) { refreshing = null; return t; }, function (e) { refreshing = null; throw e; });
+    }
+    return refreshing;
+  }
+  function logout() { ['at', 'rt', 'exp', 'verifier'].forEach(function (k) { ls(k, null); }); location.reload(); }
+
+  var pausedUntil = 0;
+  function api(method, path, body, retried) {
+    if (Date.now() < pausedUntil) return Promise.resolve(null);
+    return getToken().then(function (t) {
+      var opt = { method: method, headers: { Authorization: 'Bearer ' + t } };
+      if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+      return fetch(API + path, opt);
+    }).then(function (r) {
+      if (r.status === 401 && !retried) { ls('at', null); return api(method, path, body, true); }
+      if (r.status === 429) { pausedUntil = Date.now() + (+(r.headers.get('Retry-After') || 5)) * 1000; return null; }
+      if (r.status === 204) return null;
+      return r.text().then(function (txt) {
+        var d = null; try { d = txt ? JSON.parse(txt) : null; } catch (e) {}
+        if (!r.ok) {
+          var reason = d && d.error && (d.error.reason || d.error.message) || ('Erreur ' + r.status);
+          var err = new Error(reason); err.status = r.status; err.reason = d && d.error && d.error.reason; throw err;
+        }
+        return d;
+      });
+    });
+  }
+  function handleErr(e) {
+    if (e.message === 'login') { show('login'); return; }
+    if (e.reason === 'NO_ACTIVE_DEVICE' || e.status === 404) { openDevices(); return; }
+    if (e.reason === 'PREMIUM_REQUIRED') { toast('Spotify Premium requis'); return; }
+    if (e.status === 403 && /registered|developer/i.test(e.message)) { toast('Ajoute ton e-mail dans "User Management" de ton appli Spotify'); return; }
+    toast(e.message);
+  }
+
+  // ---------- État de lecture ----------
+  var st = { playing: false, progress: 0, duration: 0, at: 0, vol: null, art: null, deviceId: null };
+  var volDirtyUntil = 0, lastVol = 50;
+
+  function render(p) {
+    var title = 'Rien en lecture', artist = 'Choisis un appareil en haut à droite', art = null;
+    if (p && p.item) {
+      title = p.item.name;
+      artist = (p.item.artists || p.item.show && [p.item.show] || []).map(function (a) { return a.name; }).join(', ');
+      var imgs = (p.item.album && p.item.album.images) || p.item.images || [];
+      art = imgs.length ? imgs[0].url : null;
+    }
+    var t = all('.title'), a = all('.artist');
+    for (var i = 0; i < t.length; i++) { t[i].textContent = title; a[i].textContent = artist; }
+
+    st.playing = !!(p && p.is_playing);
+    st.progress = p && p.progress_ms || 0;
+    st.duration = p && p.item && p.item.duration_ms || 0;
+    st.at = Date.now();
+    $('ppicon').innerHTML = st.playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+
+    var dev = p && p.device;
+    st.deviceId = dev ? dev.id : null;
+    $('device').innerHTML = '';
+    if (dev) { var b = document.createElement('b'); b.textContent = '● '; $('device').appendChild(b); $('device').appendChild(document.createTextNode(dev.name)); }
+    else $('device').textContent = 'Choisir un appareil';
+
+    if (Date.now() > volDirtyUntil) st.vol = dev && dev.volume_percent != null ? dev.volume_percent : null;
+    renderVol();
+
+    if (art !== st.art) {
+      st.art = art;
+      $('art').style.backgroundImage = art ? 'url("' + art + '")' : 'none';
+      $('art').textContent = art ? '' : '♪';
+      $('bg').style.backgroundImage = art ? 'url("' + art + '")' : 'none';
+    }
+    tickProgress();
+  }
+  function renderVol() {
+    var on = st.vol != null;
+    $('volinfo').style.visibility = on ? 'visible' : 'hidden';
+    if (on) { $('volfill').style.width = st.vol + '%'; $('vollevel').textContent = st.vol === 0 ? 'Muet' : st.vol + ' %'; }
+  }
+  function tickProgress() {
+    var pos = st.progress + (st.playing ? Date.now() - st.at : 0);
+    if (st.duration) pos = Math.min(pos, st.duration);
+    $('progress').style.visibility = st.duration ? 'visible' : 'hidden';
+    $('fill').style.width = st.duration ? (100 * pos / st.duration) + '%' : '0';
+    $('pos').textContent = fmt(pos); $('dur').textContent = fmt(st.duration);
+  }
+
+  var polling = false;
+  function poll() {
+    if (polling || document.hidden) return;
+    polling = true;
+    api('GET', '/me/player?additional_types=episode').then(function (p) { polling = false; render(p); })
+      .catch(function (e) { polling = false; handleErr(e); });
+  }
+
+  // ---------- Commandes ----------
+  var volTimer = null;
+  function sendVol() {
+    clearTimeout(volTimer);
+    volTimer = setTimeout(function () {
+      api('PUT', '/me/player/volume?volume_percent=' + st.vol).catch(handleErr);
+    }, 150);
+  }
+  function setVol(v) {
+    if (st.vol == null) return;
+    st.vol = Math.max(0, Math.min(100, v));
+    volDirtyUntil = Date.now() + 2500;
+    renderVol(); sendVol();
+  }
+  function cmd(name) {
+    if (name === 'volup') return setVol(st.vol + 5);
+    if (name === 'voldown') return setVol(st.vol - 5);
+    if (name === 'mute') { if (st.vol > 0) { lastVol = st.vol; setVol(0); } else setVol(lastVol || 50); return; }
+    var req;
+    if (name === 'playpause') {
+      st.playing = !st.playing;
+      $('ppicon').innerHTML = st.playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+      req = api('PUT', st.playing ? '/me/player/play' : '/me/player/pause');
+    } else if (name === 'next') req = api('POST', '/me/player/next');
+    else if (name === 'prev') req = api('POST', '/me/player/previous');
+    if (req) req.then(function () { setTimeout(poll, 400); }).catch(handleErr);
+  }
+
+  function bindButtons() {
+    var bs = all('[data-cmd]');
+    for (var i = 0; i < bs.length; i++) (function (b) {
+      var timer = null;
+      function start(e) {
+        e.preventDefault(); b.classList.add('pressed'); cmd(b.getAttribute('data-cmd'));
+        if (b.getAttribute('data-repeat')) timer = setTimeout(function rep() { cmd(b.getAttribute('data-cmd')); timer = setTimeout(rep, 150); }, 400);
+      }
+      function end() { b.classList.remove('pressed'); clearTimeout(timer); }
+      b.addEventListener('touchstart', start, { passive: false });
+      b.addEventListener('touchend', end); b.addEventListener('touchcancel', end);
+      b.addEventListener('mousedown', start); b.addEventListener('mouseup', end); b.addEventListener('mouseleave', end);
+    })(bs[i]);
+  }
+
+  // ---------- Choix de l'appareil (PC, téléphone…) ----------
+  function openDevices() {
+    $('devices').classList.add('on');
+    $('devlist').textContent = 'Recherche…';
+    api('GET', '/me/player/devices').then(function (d) {
+      var list = (d && d.devices) || [];
+      $('devlist').innerHTML = '';
+      if (!list.length) { $('devlist').textContent = 'Aucun appareil : ouvre Spotify sur ton PC.'; return; }
+      list.forEach(function (dev) {
+        var b = document.createElement('button');
+        b.className = 'dev' + (dev.is_active ? ' active' : '');
+        b.textContent = dev.name;
+        var s = document.createElement('small'); s.textContent = dev.type + (dev.is_active ? ' · en cours' : '');
+        b.appendChild(s);
+        b.onclick = function () {
+          api('PUT', '/me/player', { device_ids: [dev.id], play: true })
+            .then(function () { $('devices').classList.remove('on'); setTimeout(poll, 800); }).catch(handleErr);
+        };
+        $('devlist').appendChild(b);
+      });
+    }).catch(handleErr);
+  }
+
+  // ---------- Démarrage ----------
+  $('redirShow').textContent = REDIRECT;
+  $('saveCid').onclick = function () { var v = $('cidInput').value.trim(); if (v) { ls('cid', v); location.reload(); } };
+  $('loginBtn').onclick = login;
+  $('device').onclick = openDevices;
+  $('closeDev').onclick = function () { $('devices').classList.remove('on'); };
+  $('logout').onclick = logout;
+  bindButtons();
+
+  function clock() { var d = new Date(); $('clock').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  setInterval(clock, 1000); clock();
+  document.addEventListener('touchmove', function (e) { if (!$('devices').classList.contains('on')) e.preventDefault(); }, { passive: false });
+
+  function startRemote() {
+    show('remote'); poll();
+    setInterval(poll, 2000);
+    setInterval(tickProgress, 500);
+    document.addEventListener('visibilitychange', poll);
+  }
+
+  if (!clientId()) { show('setup'); return; }
+
+  var params = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) { if (kv) { var p = kv.split('='); params[p[0]] = decodeURIComponent(p[1] || ''); } });
+
+  if (params.error) { show('login'); $('err').textContent = 'Connexion annulée (' + params.error + ')'; history.replaceState(null, '', REDIRECT); return; }
+  if (params.code) {
+    history.replaceState(null, '', REDIRECT);
+    tokenRequest({ grant_type: 'authorization_code', code: params.code, redirect_uri: REDIRECT, code_verifier: ls('verifier') || '' })
+      .then(startRemote)
+      .catch(function (e) { show('login'); $('err').textContent = e.message; });
+    return;
+  }
+  if (ls('rt')) startRemote(); else show('login');
+})();
+</script>
+</body>
+</html>
